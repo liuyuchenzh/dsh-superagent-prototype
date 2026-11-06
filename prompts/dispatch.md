@@ -13,7 +13,7 @@ When several candidates are waiting, decide those whose card already settles the
 That call may also ignore a proactive candidate whose card already shows it touches no enabled rule, as admission says.
 Do not expand a request's scope, add implementation plans, acceptance criteria or policy checklists: workers derive requirements from the original source.
 
-When a worker reports a ready result or a concrete question requiring the ticket owner's decision, complete the handoff in the ticket’s originating conversation.
+When a worker reports a ready result or a concrete question requiring the ticket owner's decision, complete the handoff in the conversation where the request was made, under the message that asked for it.
 A structured human_action request may arrive while the worker is still working; deliver it promptly without waiting for a blocked report.
 Read ticket routing metadata and the concise worker report.
 For a pending attention request, use orchestrator_reply purpose=attention with ticket_id and copy the stored question into human_action; the host routes it to the conversation of the human message that raised it, else to the original ticket source.

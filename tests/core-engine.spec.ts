@@ -1048,6 +1048,24 @@ describe('replies', () => {
     expect(h.engine.reply({ purpose: 'result', ticketId, text: 'Done' })).toMatchObject({ status: 'pending' })
     expect(h.outbox.at(-1)!.channel).toEqual(trigger('1').channel)
   })
+  it('sends a ready result under the message whose question it answers, not the ticket\'s starting conversation', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const asked = trigger('2', { actor: guest, channel: { source: 'chat', thread: 't2', address: { message: '2' } } })
+    h.engine.receive(asked)
+    // The worker reports the ready result and names the question it answers.
+    h.engine.report(ticketId, { state: 'ready', summary: 'The conditions are on the site.', answers: '2' })
+    expect(h.engine.reply({ purpose: 'result', ticketId, text: 'The conditions are on the site.' })).toMatchObject({ status: 'pending', reused: false })
+    expect(h.outbox.at(-1)).toMatchObject({ channel: asked.channel, text: 'The conditions are on the site.', kind: 'reply' })
+    // It consumed the reported answer, and a retry reuses the same message instead of sending it again.
+    expect(h.repo.tickets.get(ticketId)!.answers).toEqual([])
+    expect(h.engine.reply({ purpose: 'result', ticketId, text: 'The conditions are on the site.' })).toMatchObject({ status: 'pending', reused: true })
+    // Without an answered question, a result still goes to the ticket's starting conversation.
+    const plain = accepted(h, '7', 't7').ticketId!
+    h.engine.report(plain, { state: 'ready', summary: 'Done' })
+    expect(h.engine.reply({ purpose: 'result', ticketId: plain, text: 'Done' })).toMatchObject({ status: 'pending' })
+    expect(h.outbox.at(-1)!.channel).toEqual(trigger('7').channel)
+  })
 })
 describe('ticket commands', () => {
   it('ends a ticket by the same rule on a close and on a ready report: once no PR it opened is open, as the latest of them ended', () => {

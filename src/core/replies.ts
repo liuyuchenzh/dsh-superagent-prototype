@@ -27,9 +27,9 @@ export class Replies extends EnginePart {
   /**
    * Queue a message for the Channel its purpose names: an acknowledgement or an answer goes where that person's message was
    * written, attention where the message that raised the question was (or to the ticket's starting conversation), and a
-   * result to the conversation where the ticket started (`result` is allowed only for a ticket in `ready`, `completed`,
-   * `merged`, or `dropped`). Each message is queued at most once (idempotent). An acknowledgement, even one already queued,
-   * records that the ticket's worker took the message up.
+   * result to the question its worker reported it answers, else to the conversation where the ticket started (`result` is
+   * allowed only for a ticket in `ready`, `completed`, `merged`, or `dropped`). Each message is queued at most once
+   * (idempotent). An acknowledgement, even one already queued, records that the ticket's worker took the message up.
    * @throws UserError when the ticket or trigger is unknown or the purpose's rule refuses it, such as a result of a ticket
    * that is not ready, completed, merged, or dropped.
    */
@@ -76,19 +76,32 @@ export class Replies extends EnginePart {
     // Attention replies must match the ticket's currently open question text.
     if (request.purpose === 'attention' && (!attention || attention.question !== request.question)) throw new UserError('notAttention')
     if (request.purpose === 'answer' && !trigger?.human) throw new UserError('notQuestion')
-    const id = attention ? key('attention-reply', attention.id) : key('reply', trigger?.id ?? ticket?.id ?? '', request.text)
+    // A result that reports the answer to a person's question goes where that question was written, like an answer.
+    const answered = request.purpose === 'result' && ticket ? this.answeredQuestion(ticket) : undefined
+    const target = request.purpose === 'answer' ? trigger : answered
+    // A result keeps the ticket's key so a transport retry dedupes after the answer it routed was consumed.
+    const id = attention ? key('attention-reply', attention.id)
+      : key('reply', request.purpose === 'answer' ? trigger?.id ?? '' : ticket?.id ?? trigger?.id ?? '', request.text)
     const existing = this.options.outbox.status(id)
     const ready = !ticket || !trigger || ticket.answers?.includes(trigger.id)
     if (request.purpose === 'answer' && !ready && !existing) throw new UserError('noAnswer')
     const asker = attention?.triggerId ? this.repo.triggers.get(attention.triggerId) : undefined
-    const channel = request.purpose === 'answer' ? trigger!.channel : asker?.channel ?? (ticket ? this.sourceChannel(ticket) : undefined)
+    const source = ticket ? this.sourceChannel(ticket) : undefined
+    const channel = request.purpose === 'attention' ? asker?.channel ?? source
+      : target?.channel ?? (request.purpose === 'answer' ? undefined : source)
     if (!channel) throw new UserError('noChannel')
     this.options.outbox.send({ id, channel, text: request.text, kind: 'reply', ...ticket ? { ticketId: ticket.id } : {} })
-    if (request.purpose === 'answer' && ticket && trigger && ticket.answers?.includes(trigger.id)) {
-      ticket.answers = ticket.answers.filter(item => item !== trigger.id)
+    // The answer is consumed whether it went out as an answer or as a result, so it cannot be sent twice.
+    if (ticket && target && ticket.answers?.includes(target.id)) {
+      ticket.answers = ticket.answers.filter(item => item !== target.id)
       this.repo.tickets.save(ticket)
     }
     return { id, status: this.options.outbox.status(id) ?? 'pending', reused: existing !== undefined }
+  }
+  /** The latest question a ticket's worker reported answering whose reply the main Session has not sent yet. */
+  private answeredQuestion(ticket: Ticket): Trigger | undefined {
+    const triggerId = ticket.answers?.at(-1)
+    return triggerId ? this.repo.triggers.get(triggerId) : undefined
   }
   /** The conversation a ticket started in: its origin Trigger's Channel, else its first Channel. */
   private sourceChannel(ticket: Ticket): ChannelRef | undefined { return this.source(ticket)?.channel ?? ticket.channels[0] }

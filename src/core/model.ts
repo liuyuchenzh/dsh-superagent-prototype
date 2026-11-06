@@ -279,7 +279,7 @@ export interface Ticket {
   title: string
   decisionId: string
   mandate: Mandate
-  /** The Channels of the messages it was accepted from, which its replies go to. */
+  /** The Channels of the messages it was accepted from, which its replies go to unless a reply answers a later question. */
   channels: ChannelRef[]
   /** When, by whom, and how the ticket ended, with a person's or the host's reason beyond the outcome; an open ticket has none. */
   ended?: { at: string; by: TicketEndBy; outcome: TicketOutcome; reason?: string }
