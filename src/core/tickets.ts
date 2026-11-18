@@ -1,7 +1,7 @@
 /** Tickets: their lifecycle from an accept to their end, their Subscriptions and their Inputs. */
 import { key } from './ids.ts'
 import { UserError } from './errors.ts'
-import { latestAssignment, latestReport, liveTicket, readUntil, runningAssignment, settled, threadKey, waitsForPerson } from './model.ts'
+import { latestAssignment, latestReport, liveTicket, readUntil, runningAssignment, settled, threadKey, waitsForPerson, workingOnInput } from './model.ts'
 import type { Assignment, ChannelRef, Evaluation, Follow, Mandate, PolicyEffect, ThreadRef, Ticket, TicketEndBy, TicketInput, TicketOutcome,
   Trigger, TriggerDisposition } from './model.ts'
 import type { AssessmentOutcome } from './ports.ts'
@@ -143,13 +143,15 @@ export class Tickets extends EnginePart {
     else if (note) this.addInput(ticket, input(key('input', ticketId, 'trigger', trigger.id, 'note', note)))
   }
   /**
-   * Ask a running worker whose latest report is `waiting` for a status report; leaves any other ticket alone.
+   * Ask an idle running worker whose latest report is `waiting` for a status report; leaves any other ticket alone. A worker
+   * that still has an Input to work on is not asked: its status request would only interrupt work already in flight.
    * @returns whether the status request input was queued.
    * @throws UserError when the ticket is unknown.
    */
   requestStatus(ticketId: string): boolean {
     const ticket = this.require(ticketId)
-    if (!liveTicket(ticket) || runningAssignment(ticket)?.report?.state !== 'waiting') return false
+    const assignment = runningAssignment(ticket)
+    if (!liveTicket(ticket) || assignment?.report?.state !== 'waiting' || workingOnInput(ticket, assignment)) return false
     this.addInput(ticket, { id: `status:${ticketId}:${ticket.updatedAt}`, kind: 'text', text: STATUS_REQUEST, at: this.now() })
     return true
   }

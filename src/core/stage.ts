@@ -1,5 +1,5 @@
 /** Ticket stage classification and retry eligibility (docs/003). */
-import { latestAssignment, waitsForPerson, type Ticket } from './model.ts'
+import { latestAssignment, waitsForPerson, workingOnInput, type Ticket } from './model.ts'
 
 /** High-level execution stage of a ticket: waiting on a person, actively working or queued, idle between turns, or ended. */
 export type TicketStage = { stage: 'person'; action: 'delivery' | 'answer' | 'review' | 'blocked' | 'failed' }
@@ -16,7 +16,9 @@ export function ticketStage(ticket: Ticket): TicketStage {
   // A human follow-up after a blocked or failed report returns the ticket to the executor.
   if ((report === 'blocked' || report === 'failed') && waitsForPerson(ticket)) return { stage: 'person', action: report }
   if (!assignment || assignment.state === 'pending') return { stage: 'working', action: 'queued' }
-  if (report === 'waiting' || assignment.state === 'ended') return { stage: 'idle' }
+  // A waiting Report is idle only once nothing it did not answer still waits for the worker.
+  if (assignment.state === 'ended') return { stage: 'idle' }
+  if (report === 'waiting' && !workingOnInput(ticket, assignment)) return { stage: 'idle' }
   return { stage: 'working' }
 }
 
