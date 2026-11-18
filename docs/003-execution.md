@@ -13,12 +13,12 @@ Each open Ticket has one stage, determined by what it is waiting for. Read the t
 | person / review | The latest Report is `ready` | Awaiting review |
 | person / blocked, failed | The latest Report is `blocked` or `failed`, and no person's message reached the Ticket since | Blocked · Failed |
 | working / queued | No Assignment, or a pending one | Queued |
-| idle | The latest Report is `waiting`, or the Assignment ended | Waiting for a Trigger |
+| idle | The latest Report is `waiting` with no Input since it, or the Assignment ended | Waiting for a Trigger |
 | working | Everything else | Working |
 
 A `person` stage means the Ticket cannot continue without human input. A new human message releases a `blocked` or `failed` Ticket to its Executor, so it moves to the next matching stage, usually `working`.
 
-An `idle` Ticket has finished its turn without an outstanding question. A Trigger on a subscribed Thread can continue it.
+An `idle` Ticket has finished its turn without an outstanding question, and no Input is still waiting for or being handled by its worker. A Trigger on a subscribed Thread can continue it.
 
 ## The Executor
 

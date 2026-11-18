@@ -335,6 +335,17 @@ export const latestAssignment = (ticket: Ticket): Assignment | undefined => tick
 /** The latest report any of a ticket's Assignments made, which is what the ticket last said. */
 export const latestReport = (ticket: Pick<Ticket, 'assignments'>): Assignment['report'] => ticket.assignments.findLast(assignment => assignment.report)?.report
 /**
+ * Whether the worker of `assignment` has an Input its latest Report does not answer: an Input waits for delivery, one was
+ * delivered after that Report, or a Trigger reached the Session but its worker has not taken it into a step yet. Such work
+ * is in flight, so the ticket is working rather than idle until a Report or the end of a turn accounts for it.
+ */
+export function workingOnInput(ticket: Pick<Ticket, 'inputs' | 'undelivered'>, assignment: Assignment): boolean {
+  if (ticket.undelivered.length) return true
+  const report = assignment.report
+  if (assignment.deliveredAt && (!report || assignment.deliveredAt >= report.at)) return true
+  return ticket.inputs.some(input => input.kind === 'trigger' && input.deliveredTo === assignment.id && input.readAt === null)
+}
+/**
  * Until when a ticket's worker had a turn to read what reached it: its latest report, but a progress report when `progress`
  * is false, or the end of its latest turn, whichever is later.
  */

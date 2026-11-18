@@ -120,7 +120,7 @@ export class Engine {
     })
   }
   /**
-   * Ask a running worker that waits in `waiting` state for its status; any other worker is left alone.
+   * Ask a running worker that waits in `waiting` state with no Input to work on for its status; any other worker is left alone.
    * @returns whether the worker was asked.
    * @throws UserError when the ticket is unknown.
    */

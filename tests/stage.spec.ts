@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRetry, ticketStage, type Assignment, type ReportState, type Ticket } from '../src/core/index.ts'
+import { canRetry, ticketStage, type Assignment, type ReportState, type Ticket, type TicketInput } from '../src/core/index.ts'
 
 const assignment = (overrides: Partial<Assignment> = {}): Assignment => ({ id: 'a', state: 'running', createdAt: '', ...overrides })
 const reported = (state: ReportState, overrides: Partial<Assignment> = {}) => assignment({ report: { state, summary: '', at: '' }, ...overrides })
@@ -9,6 +9,11 @@ const attention = { id: 'q', question: '?' }
 /** A person's message that reached the Ticket after its report. */
 const answered = { inputs: [{ id: 'i', kind: 'trigger' as const, triggerId: 'e', at: 'later', human: true as const }] }
 const reportedAt = (state: ReportState) => reported(state, { report: { state, summary: '', at: 'earlier' } })
+/** A waiting Report at `at`, with what reached the worker around it. */
+const waitingSince = (at: string, overrides: Partial<Assignment> = {}) => reported('waiting', { report: { state: 'waiting', summary: '', at }, ...overrides })
+/** A Trigger Input delivered to Assignment `a`, unclaimed unless `readAt` is given. */
+const triggerInput = (overrides: { id?: string; deliveredTo?: string; readAt?: string | null } = {}): TicketInput =>
+  ({ id: 'i', kind: 'trigger', triggerId: 'e', at: 'earlier', ...overrides })
 const ended = { at: '', by: 'executor' as const, reason: 'closed', outcome: 'closed' as const }
 
 // The rows of the docs/003 table, in order; a Ticket that matches several rows takes the first.
@@ -27,6 +32,13 @@ describe('ticketStage', () => {
     ['no Assignment', ticket({ assignments: [] }), { stage: 'working', action: 'queued' }],
     ['a pending Assignment', ticket({ assignments: [reported('failed', { state: 'ended' }), assignment({ state: 'pending' })] }), { stage: 'working', action: 'queued' }],
     ['a waiting Report', ticket({ assignments: [reported('waiting')] }), { stage: 'idle' }],
+    ['a waiting Report with an Input delivered after it', ticket({ assignments: [waitingSince('a', { deliveredAt: 'b' })] }), { stage: 'working' }],
+    ['a waiting Report with an Input still waiting for delivery', ticket({ assignments: [waitingSince('a')], undelivered: ['i'] }), { stage: 'working' }],
+    ['a waiting Report with a Trigger the worker has not taken into a step',
+      ticket({ assignments: [waitingSince('b', { deliveredAt: 'a' })], inputs: [triggerInput({ deliveredTo: 'a', readAt: null })] }), { stage: 'working' }],
+    ['a waiting Report whose Inputs were taken and none came after',
+      ticket({ assignments: [waitingSince('b', { deliveredAt: 'a' })], inputs: [triggerInput({ deliveredTo: 'a', readAt: 'a' })] }), { stage: 'idle' }],
+    ['an ended Assignment with an Input delivered after its Report', ticket({ assignments: [waitingSince('a', { state: 'ended', deliveredAt: 'b' })] }), { stage: 'idle' }],
     ['an ended Assignment', ticket({ assignments: [assignment({ state: 'ended' })] }), { stage: 'idle' }],
     ['a running Assignment', ticket(), { stage: 'working' }],
     ['a progress Report', ticket({ assignments: [reported('progress')] }), { stage: 'working' }],

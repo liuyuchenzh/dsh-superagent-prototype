@@ -163,6 +163,8 @@ it('shows a ticket card\'s state from a closed set: the open ticket\'s stage, th
     [{ ...ticket, assignments: [{ ...ticket.assignments[0]!, state: 'pending', report: undefined }] }, 'working/queued'],
     [{ ...ticket, ended: { at: 'e', by: 'human', reason: 'Not needed after all', outcome: 'stopped' } }, 'stopped'],
     [{ ...ticket, ended: { at: 'e', by: 'executor', reason: 'merged', outcome: 'merged' } }, 'merged'],
+    // A waiting Report the worker has not answered with a turn is working again once an Input reached it.
+    [{ ...ticket, assignments: [{ ...ticket.assignments[0]!, report: { state: 'waiting', summary: '', at: '' }, deliveredAt: 'after' }] }, 'working'],
   ]
   for (const [item, state] of cases) expect(ticketCard(item).state).toBe(state)
   expect(cases.map(([item]) => ticketCard(item).state).every(state => (TICKET_STATES as readonly string[]).includes(state))).toBe(true)

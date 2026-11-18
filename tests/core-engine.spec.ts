@@ -1130,6 +1130,29 @@ describe('ticket commands', () => {
     expect(h.executor.stop).toHaveBeenCalledOnce()
     expect(h.executor.start).toHaveBeenLastCalledWith(expect.objectContaining({ id: ticketId }), retried.assignments[1])
   })
+  it('asks a waiting worker for its status only while no Input is working it', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const stage = () => ticketStage(h.repo.tickets.get(ticketId)!)
+    h.engine.report(ticketId, { state: 'waiting', summary: 'idle' })
+    expect(stage()).toEqual({ stage: 'idle' })
+    expect(h.engine.requestStatus(ticketId)).toBe(true)
+    // The status request itself now waits for delivery: the ticket is working and a second request would pile up behind it.
+    expect(stage()).toEqual({ stage: 'working' })
+    expect(h.engine.requestStatus(ticketId)).toBe(false)
+    // A message that reached the worker after its waiting report means it is working, not waiting.
+    h.tick(1)
+    h.engine.receive(trigger('2', { threads: [{ source: 'chat', id: 't1' }] }))
+    h.settle()
+    expect(stage()).toEqual({ stage: 'working' })
+    expect(h.engine.requestStatus(ticketId)).toBe(false)
+    // Once its Session takes the message into a step it is still working on it, until a newer report answers it.
+    h.read(ticketId)
+    expect(stage()).toEqual({ stage: 'working' })
+    h.tick(1)
+    h.engine.report(ticketId, { state: 'waiting', summary: 'idle again' })
+    expect(stage()).toEqual({ stage: 'idle' })
+  })
 })
 describe('failed deliveries', () => {
   it('forgets a failed delivery once a new Assignment takes over or the ticket ends', () => {
